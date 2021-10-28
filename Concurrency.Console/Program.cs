@@ -30,7 +30,7 @@ namespace Concurrency.Demo
             ThreadPool.SetMinThreads(8, 8);
             ThreadPool.SetMaxThreads(32767, 1000);
 
-            CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+            CancellationTokenSource cancellationTokenSource = new();
 
             #region Init Gateway in a Broadcast
             var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionStatus, AccountDto>>((gateway) =>
