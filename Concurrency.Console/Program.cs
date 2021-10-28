@@ -1,4 +1,5 @@
 ﻿using Concurrency.Dto;
+using Concurrency.Dto.Base;
 using Concurrency.Dto.Enums;
 using Concurrency.Services.Factories;
 using Concurrency.Services.Interfaces.Generic;
@@ -33,29 +34,37 @@ namespace Concurrency.Demo
             CancellationTokenSource cancellationTokenSource = new();
 
             #region Init Gateway in a Broadcast
-            var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionStatus, AccountDto>>((gateway) =>
+            var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>>((gateway) =>
             {
                 var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
                 XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
-                return BookingGatewayFactory.CreateSqlite<IBookingGateway<TransactionStatus, AccountDto>>();
+                return BookingGatewayFactory.CreateSqlite<IBookingGateway<TransactionResult<AccountDto>, AccountDto>>();
             });
             #endregion
 
             #region Deposit to Account Stage
-            var depositFromAccountBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
+            var depositFromAccountBlock = new TransformBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>, TransactionResult<AccountDto>>(
                 async (bookingGateway) =>
                 {
+                    Random random = new();
+                    AccountDto fromAccount = null;
+                    double randomFromAmount = random.Next(MIN_DEPOSIT, MAX_DEPOSIT);
+
                     try
                     {
-                        Random random = new();
-                        double randomFromAmount = random.Next(MIN_DEPOSIT, MAX_DEPOSIT);
-                        AccountDto fromAccount = await bookingGateway.GetRandomAccount();
+                        fromAccount = await bookingGateway.GetRandomAccount();
                         return await bookingGateway.Deposit(fromAccount, randomFromAmount);
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         cancellationTokenSource.Cancel();
-                        return TransactionStatus.Failure;
+                        return new TransactionResult<AccountDto>
+                        {
+                            Data = fromAccount,
+                            Exception = ex,
+                            TransactionStatus = TransactionStatus.Failure,
+                            TransferedAmount = randomFromAmount
+                        };
                     }
                 }, new ExecutionDataflowBlockOptions
                 {
@@ -63,9 +72,9 @@ namespace Concurrency.Demo
                     CancellationToken = cancellationTokenSource.Token
                 });
 
-            var writeDepositTransactionBlock = new ActionBlock<TransactionStatus>(tStatus =>
+            var writeDepositTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction deposit to account result: {tStatus}");
+                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null? result.Exception.ToString(): result.TransactionStatus)}");
             });
 
             initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -73,20 +82,28 @@ namespace Concurrency.Demo
             #endregion
 
             #region Withdraw from Account Stage
-            var withdrawFromAccountBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
+            var withdrawFromAccountBlock = new TransformBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>, TransactionResult<AccountDto>>(
                 async (bookingGateway) =>
                 {
+                    Random random = new();
+                    double randomAmount = random.Next(MIN_WITHDRAW, MAX_WITHDRAW);
+                    AccountDto fromAccount = null;
+
                     try
                     {
-                        Random random = new();
-                        double randomAmount = random.Next(MIN_WITHDRAW, MAX_WITHDRAW);
-                        AccountDto fromAccount = await bookingGateway.GetRandomAccount();
+                        fromAccount = await bookingGateway.GetRandomAccount();
                         return await bookingGateway.Withdraw(fromAccount, randomAmount);
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         cancellationTokenSource.Cancel();
-                        return TransactionStatus.Failure;
+                        return new TransactionResult<AccountDto>
+                        {
+                            Data = fromAccount,
+                            Exception = ex,
+                            TransactionStatus = TransactionStatus.Failure,
+                            TransferedAmount = randomAmount
+                        };
                     }
                 }, new ExecutionDataflowBlockOptions
                 {
@@ -94,28 +111,41 @@ namespace Concurrency.Demo
                     CancellationToken = cancellationTokenSource.Token
                 });
 
-            var writeWithdrawTransactionBlock = new ActionBlock<TransactionStatus>(tStatus => Console.WriteLine($"Transaction withdraw from account result: {tStatus}"));
+            var writeWithdrawTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
+            {
+                Console.WriteLine($"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
+            });
+
             initGatewayBlock.LinkTo(withdrawFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
             withdrawFromAccountBlock.LinkTo(writeWithdrawTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             #region Transfer between Accounts Stags
-            var transferBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
+            var transferBlock = new TransformBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>, TransactionResult<AccountDto>>(
                 async (bookingGateway) =>
                 {
+                    AccountDto fromAccount = null;
+                    AccountDto toAccount = null;
+                    Random random = new();
+                    double randomAmount = random.Next(MIN_TRANSFER, MAX_TRANSFER);
+
                     try
                     {
-                        Random random = new();
-                        double randomAmount = random.Next(MIN_TRANSFER, MAX_TRANSFER);
-                        AccountDto fromAccount = await bookingGateway.GetRandomAccount();
-                        AccountDto toAccount = await bookingGateway.GetRandomAccount();
+                        fromAccount = await bookingGateway.GetRandomAccount();
+                        toAccount = await bookingGateway.GetRandomAccount();
 
                         return await bookingGateway.Transfer(fromAccount, toAccount, randomAmount);
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         cancellationTokenSource.Cancel();
-                        return TransactionStatus.Failure;
+                        return new TransactionResult<AccountDto>
+                        {
+                            Data = fromAccount,
+                            Exception = ex,
+                            TransactionStatus = TransactionStatus.Failure,
+                            TransferedAmount = randomAmount
+                        }; ;
                     }
                 }, new ExecutionDataflowBlockOptions
                 {
@@ -123,7 +153,11 @@ namespace Concurrency.Demo
                     CancellationToken = cancellationTokenSource.Token
                 });
 
-            var writeTransferStatusBlock = new ActionBlock<TransactionStatus>(tStatus => Console.WriteLine($"Transfer status between 2 accounts result: {tStatus}"));
+            var writeTransferStatusBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
+            {
+                Console.WriteLine($"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
+            });
+
             initGatewayBlock.LinkTo(transferBlock, new DataflowLinkOptions { PropagateCompletion = true });
             transferBlock.LinkTo(writeTransferStatusBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion

@@ -1,15 +1,16 @@
-﻿using System;
+﻿using Concurrency.Dto.Base;
+using System;
 using System.Threading.Tasks;
 
 namespace Concurrency.Services.Interfaces.Generic
 {
-    public interface IBookingGateway<TransactionStatusDataType, AccountDataType> : IAsyncDisposable where AccountDataType : class
+    public interface IBookingGateway<TransactionResultDataType, AccountDataType> : IAsyncDisposable where AccountDataType : class where TransactionResultDataType : class
     {
-        Task<TransactionStatusDataType> Withdraw(AccountDataType account, double amount);
+        Task<TransactionResultDataType> Withdraw(AccountDataType account, double amount);
 
-        Task<TransactionStatusDataType> Deposit(AccountDataType account, double amount);
+        Task<TransactionResultDataType> Deposit(AccountDataType account, double amount);
 
-        Task<TransactionStatusDataType> Transfer(AccountDataType fromAccount, AccountDataType toAccount, double amount);
+        Task<TransactionResultDataType> Transfer(AccountDataType fromAccount, AccountDataType toAccount, double amount);
 
         Task<AccountDataType> GetRandomAccount();
     }
