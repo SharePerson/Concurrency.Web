@@ -1,7 +1,8 @@
 ﻿using Concurrency.Dto;
-using Concurrency.Services.Enums;
+using Concurrency.Dto.Enums;
 using Concurrency.Services.Factories;
 using Concurrency.Services.Interfaces;
+using Concurrency.Services.Interfaces.Generic;
 using log4net;
 using log4net.Config;
 using System;
@@ -33,16 +34,16 @@ namespace Concurrency.Demo
             CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
 
             #region Init Gateway in a Broadcast
-            var initGatewayBlock = new BroadcastBlock<IBookingGateway>((gateway) =>
+            var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionStatus, AccountDto>>((gateway) =>
             {
                 var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
                 XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
-                return BookingGatewayFactory.CreateSqlite<IBookingGateway>();
+                return BookingGatewayFactory.CreateSqlite<IBookingGateway<TransactionStatus, AccountDto>>();
             });
             #endregion
 
             #region Deposit to Account Stage
-            var depositFromAccountBlock = new TransformBlock<IBookingGateway, TransactionStatus>(
+            var depositFromAccountBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
                 async (bookingGateway) =>
                 {
                     try
@@ -73,7 +74,7 @@ namespace Concurrency.Demo
             #endregion
 
             #region Withdraw from Account Stage
-            var withdrawFromAccountBlock = new TransformBlock<IBookingGateway, TransactionStatus>(
+            var withdrawFromAccountBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
                 async (bookingGateway) =>
                 {
                     try
@@ -100,7 +101,7 @@ namespace Concurrency.Demo
             #endregion
 
             #region Transfer between Accounts Stags
-            var transferBlock = new TransformBlock<IBookingGateway, TransferStatus>(
+            var transferBlock = new TransformBlock<IBookingGateway<TransactionStatus, AccountDto>, TransactionStatus>(
                 async (bookingGateway) =>
                 {
                     try
@@ -115,7 +116,7 @@ namespace Concurrency.Demo
                     catch
                     {
                         cancellationTokenSource.Cancel();
-                        return TransferStatus.Failure;
+                        return TransactionStatus.Failure;
                     }
                 }, new ExecutionDataflowBlockOptions
                 {
@@ -123,7 +124,7 @@ namespace Concurrency.Demo
                     CancellationToken = cancellationTokenSource.Token
                 });
 
-            var writeTransferStatusBlock = new ActionBlock<TransferStatus>(tStatus => Console.WriteLine($"Transfer status between 2 accounts result: {tStatus}"));
+            var writeTransferStatusBlock = new ActionBlock<TransactionStatus>(tStatus => Console.WriteLine($"Transfer status between 2 accounts result: {tStatus}"));
             initGatewayBlock.LinkTo(transferBlock, new DataflowLinkOptions { PropagateCompletion = true });
             transferBlock.LinkTo(writeTransferStatusBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion

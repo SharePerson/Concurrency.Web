@@ -1,8 +1,8 @@
 ﻿using Concurrency.Dto;
+using Concurrency.Dto.Enums;
 using Concurrency.Entities.Banking;
 using Concurrency.Repositories.Interfaces;
 using Concurrency.Services.Base;
-using Concurrency.Services.Enums;
 using Concurrency.Services.Interfaces;
 using log4net;
 using Microsoft.EntityFrameworkCore;
@@ -121,17 +121,17 @@ namespace Concurrency.Services
             return MapObject<Account, AccountDto>(await accountRepository.Get(a => a.Id == randomeAccountId));
         }
 
-        public async Task<TransferStatus> Transfer(AccountDto fromAccount, AccountDto toAccount, double amount)
+        public async Task<TransactionStatus> Transfer(AccountDto fromAccount, AccountDto toAccount, double amount)
         {
-            if (fromAccount == null || toAccount == null || amount <= 0) return TransferStatus.BadInput;
+            if (fromAccount == null || toAccount == null || amount <= 0) return TransactionStatus.BadInput;
 
-            if (fromAccount.Id == toAccount.Id) return TransferStatus.SameAccountRejection;
+            if (fromAccount.Id == toAccount.Id) return TransactionStatus.SameAccountRejection;
 
             Account fromAccountEntity = await accountRepository.Get(a => a.Id == fromAccount.Id);
 
-            if (fromAccountEntity == null) return TransferStatus.FromAccountNotFound;
+            if (fromAccountEntity == null) return TransactionStatus.FromAccountNotFound;
 
-            if (fromAccountEntity.Balance < amount) return TransferStatus.FromAccountInsufficientFunds;
+            if (fromAccountEntity.Balance < amount) return TransactionStatus.FromAccountInsufficientFunds;
 
             accountRepository.SetOriginalValue(fromAccountEntity, nameof(fromAccountEntity.RowVersion), fromAccount.RowVersion);
 
@@ -142,7 +142,7 @@ namespace Concurrency.Services
 
             Account toAccountEntity = await accountRepository.Get(a => a.Id == toAccount.Id);
 
-            if (toAccountEntity == null) return TransferStatus.ToAccountNotFound;
+            if (toAccountEntity == null) return TransactionStatus.ToAccountNotFound;
 
             accountRepository.SetOriginalValue(toAccountEntity, nameof(toAccountEntity.RowVersion), toAccount.RowVersion);
 
@@ -173,7 +173,7 @@ namespace Concurrency.Services
                 });
 
                 await unitOfWork.Commit();
-                return TransferStatus.Success;
+                return TransactionStatus.Success;
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -190,7 +190,7 @@ namespace Concurrency.Services
 
                         if (clientEntry.Id == fromAccount.Id)
                         {
-                            if (dbValues == null) return TransferStatus.FromAccountNotFound;
+                            if (dbValues == null) return TransactionStatus.FromAccountNotFound;
 
                             Account dbEntry = dbValues.ToObject() as Account;
 
@@ -200,14 +200,14 @@ namespace Concurrency.Services
                                 {
                                     fromAccount.RowVersion = dbEntry.RowVersion;
                                     fromAccount.Balance = dbEntry.Balance;
-                                    return TransferStatus.OutdatedFromAccount;
+                                    return TransactionStatus.OutdatedFromAccount;
                                 }
                             }
                         }
 
                         if (clientEntry.Id == toAccount.Id)
                         {
-                            if (dbValues == null) return TransferStatus.ToAccountNotFound;
+                            if (dbValues == null) return TransactionStatus.ToAccountNotFound;
 
                             Account dbEntry = dbValues.ToObject() as Account;
 
@@ -217,7 +217,7 @@ namespace Concurrency.Services
                                 {
                                     toAccount.RowVersion = dbEntry.RowVersion;
                                     toAccount.Balance = dbEntry.Balance;
-                                    return TransferStatus.OutdatedToAccount;
+                                    return TransactionStatus.OutdatedToAccount;
                                 }
                             }
                         }
@@ -229,7 +229,7 @@ namespace Concurrency.Services
                 Log.Error(ex.Message, ex);
             }
 
-            return TransferStatus.Failure;
+            return TransactionStatus.Failure;
         }
 
         public async Task<TransactionStatus> Withdraw(AccountDto account, double amount)

@@ -1,5 +1,6 @@
 ﻿using Concurrency.Entities;
 using Concurrency.Services.Interfaces;
+using Concurrency.Services.Interfaces.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,7 @@ namespace Concurrency.Services.Factories
                 }), ServiceLifetime.Transient)
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
+                .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
                 .BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
@@ -40,6 +42,7 @@ namespace Concurrency.Services.Factories
                 }), ServiceLifetime.Transient)
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
+                .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
                 .BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();

@@ -1,6 +1,6 @@
 ﻿using Concurrency.Dto;
+using Concurrency.Dto.Enums;
 using Concurrency.Services.Base;
-using Concurrency.Services.Enums;
 using Concurrency.Services.Interfaces;
 using System;
 using System.Threading.Tasks;
@@ -57,11 +57,11 @@ namespace Concurrency.Services
             return null;
         }
 
-        public TransferStatus Transfer(AccountDto fromAccount, AccountDto toAccount, double amount)
+        public TransactionStatus Transfer(AccountDto fromAccount, AccountDto toAccount, double amount)
         {
             try
             {
-                Task<TransferStatus> task = Task.Run(async () => await bookingGateway.Transfer(fromAccount, toAccount, amount));
+                Task<TransactionStatus> task = Task.Run(async () => await bookingGateway.Transfer(fromAccount, toAccount, amount));
                 task.ConfigureAwait(false);
                 return task.GetAwaiter().GetResult();
             }
@@ -74,7 +74,7 @@ namespace Concurrency.Services
                 });
             }
 
-            return TransferStatus.Failure;
+            return TransactionStatus.Failure;
         }
 
         public TransactionStatus Withdraw(AccountDto account, double amount)

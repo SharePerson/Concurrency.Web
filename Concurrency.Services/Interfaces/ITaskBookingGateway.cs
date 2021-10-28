@@ -1,5 +1,5 @@
 ﻿using Concurrency.Dto;
-using Concurrency.Services.Enums;
+using Concurrency.Dto.Enums;
 
 namespace Concurrency.Services.Interfaces
 {
@@ -9,7 +9,7 @@ namespace Concurrency.Services.Interfaces
 
         TransactionStatus Deposit(AccountDto account, double amount);
 
-        TransferStatus Transfer(AccountDto fromAccount, AccountDto toAccount, double amount);
+        TransactionStatus Transfer(AccountDto fromAccount, AccountDto toAccount, double amount);
 
         AccountDto GetRandomAccount();
     }
