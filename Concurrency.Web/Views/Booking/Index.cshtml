@@ -1,0 +1,39 @@
+﻿@model BookingDto
+
+<form asp-action="Update" asp-controller="Booking">
+    @Html.HiddenFor(m => m.RowVersion)
+    @Html.HiddenFor(m => m.Slot.RowVersion)
+
+    <input hidden asp-for="Id" />
+    <input hidden asp-for="SlotId" />
+    <input hidden asp-for="BookingUserId" />
+
+    @if (!string.IsNullOrEmpty(ViewBag.ReservationResponse))
+    {
+        <div class="alert alert-info">
+            Response for: @Model.Slot.Name: @ViewBag.ReservationResponse
+        </div>
+    }
+
+    <div class="container border p-3">
+        <h1 class="text-info">Booking Slot for User: @(Model?.BookingUserId ?? "Not booked Yet")</h1>
+        <hr />
+        <div class="row">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-2">
+                <label asp-for="Notes" class="control-label pt-2" style="font-size:20px;"></label>
+            </div>
+            <div class="col-10 pb-3">
+                <input asp-for="Notes" class="form-control" />
+                <span asp-validation-for="Notes" class="text-danger"></span>
+            </div>
+            <div class="col-5">
+                <input type="submit" value="Update" class="btn btn-success form-control text-light" />
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
