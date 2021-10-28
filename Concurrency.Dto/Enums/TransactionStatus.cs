@@ -1,9 +1,13 @@
-﻿namespace Concurrency.Services.Enums
+﻿namespace Concurrency.Dto.Enums
 {
-    public enum TransferStatus
+    public enum TransactionStatus
     {
         Success,
         Failure,
+        InsufficientFunds,
+        AccountNotFound,
+        OutdatedAccount,
+        InvalidBalance,
         FromAccountInsufficientFunds,
         FromAccountNotFound,
         OutdatedFromAccount,

@@ -1,7 +1,6 @@
 ﻿using Concurrency.Dto;
-using Concurrency.Services.Enums;
+using Concurrency.Dto.Enums;
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Concurrency.Services.Interfaces
@@ -12,7 +11,7 @@ namespace Concurrency.Services.Interfaces
 
         Task<TransactionStatus> Deposit(AccountDto account, double amount);
 
-        Task<TransferStatus> Transfer(AccountDto fromAccount, AccountDto toAccount, double amount);
+        Task<TransactionStatus> Transfer(AccountDto fromAccount, AccountDto toAccount, double amount);
 
         Task<AccountDto> GetRandomAccount();
     }
