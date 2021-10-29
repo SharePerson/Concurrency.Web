@@ -4,6 +4,7 @@ using Concurrency.Dto.Enums;
 using Concurrency.Entities;
 using Concurrency.Entities.Banking;
 using Concurrency.Services.Base;
+using Concurrency.Services.Interfaces.Generic;
 using log4net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -12,7 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Concurrency.Services.Interfaces.Generic
+namespace Concurrency.Services.Generic
 {
     /// <summary>
     /// In order for this implementation class to be used, 

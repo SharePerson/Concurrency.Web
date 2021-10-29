@@ -1,12 +1,11 @@
 ﻿using Concurrency.Entities;
+using Concurrency.Services.Generic;
 using Concurrency.Services.Interfaces;
 using Concurrency.Services.Interfaces.Generic;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.IO;
 
 namespace Concurrency.Services.Factories
 {
