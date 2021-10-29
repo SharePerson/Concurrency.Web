@@ -29,6 +29,27 @@ namespace Concurrency.Migrations.Sqlite.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.Sql(
+               @"
+                CREATE TRIGGER SetTicketsTimestampOnUpdate
+                AFTER UPDATE ON Tickets
+                BEGIN
+                    UPDATE Tickets
+                    SET RowVersion = randomblob(8)
+                    WHERE rowid = NEW.rowid;
+                END
+            ");
+            migrationBuilder.Sql(
+                @"
+                CREATE TRIGGER SetTicketsTimestampOnInsert
+                AFTER INSERT ON Tickets
+                BEGIN
+                    UPDATE Tickets
+                    SET RowVersion = randomblob(8)
+                    WHERE rowid = NEW.rowid;
+                END
+            ");
+
             migrationBuilder.InsertData(
                 table: "Tickets",
                 columns: new[] { "Id", "IsAvailable", "ReservationDate", "ReservedById", "TicketDate" },
