@@ -22,7 +22,7 @@ namespace Concurrency.Demo
     class Program : IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
         private const int MAX_OPERATIONS = 1000;
-        private const int MAX_PARALLEL_OPERATIONS = 10;
+        private const int MAX_PARALLEL_OPERATIONS = 1;
         private const int MIN_DEPOSIT = 100;
         private const int MAX_DEPOSIT = 1000;
         private const int MIN_WITHDRAW = 200;

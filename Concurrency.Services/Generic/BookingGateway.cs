@@ -125,19 +125,11 @@ namespace Concurrency.Services.Generic
 
         public async Task<AccountDtoDT> GetRandomAccount()
         {
-            List<string> guids = new()
-            {
-                "1CFBBE9E-D9AD-4512-98C7-1AC32C0949F8",
-                "10D7E635-51F7-4061-A89D-5B62BEB361F4",
-                "E7661426-9171-426B-AA63-5EF958830A8E",
-                "35E902FA-034F-4E32-89E5-8F8019906FBD",
-                "67675CF8-7518-4551-B775-E89C467D4228"
-            };
-
-            Random random = new Random();
-
-            Guid randomeAccountId = Guid.Parse(guids[random.Next(0, 5)]);
-            return MapObject<Account, AccountDto>(await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == randomeAccountId)) as AccountDtoDT;
+            Random rand = new();
+            int toSkip = rand.Next(0, 5);
+            return MapObject<Account, AccountDto>(await dbContext.Accounts.OrderBy(a => a.Id)
+                .Skip(toSkip).Take(1)
+                .FirstOrDefaultAsync()) as AccountDtoDT;
         }
 
         public async Task<TransactionResultDT> Transfer(AccountDtoDT fromAccount, AccountDtoDT toAccount, double amount)
@@ -558,9 +550,9 @@ namespace Concurrency.Services.Generic
 
         public async Task<TicketDto> GetRandomTicket()
         {
-            Random rnd = new();
-            List<Ticket> ticketEntities = await dbContext.Tickets.ToListAsync();
-            Ticket ticketEntity = ticketEntities[rnd.Next(0, 10000)];
+            Random rand = new();
+            int toSkip = rand.Next(0, 10000);
+            Ticket ticketEntity = await dbContext.Tickets.OrderBy(t => t.Id).Skip(toSkip).Take(1).FirstOrDefaultAsync();
             return MapObject<Ticket, TicketDto>(ticketEntity);
         }
 
