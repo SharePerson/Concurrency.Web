@@ -19,7 +19,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace Concurrency.Demo
 {
-    class Program: IDesignTimeDbContextFactory<ConcurrencyDbContext>
+    class Program : IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
         private const int MAX_OPERATIONS = 1000;
         private const int MAX_PARALLEL_OPERATIONS = 10;
@@ -74,7 +74,7 @@ namespace Concurrency.Demo
                         return new TransactionResult<AccountDto>
                         {
                             Data = fromAccount,
-                            Exception = ex,
+                            IsFaulted = true,
                             TransactionStatus = TransactionStatus.Failure,
                             TransferedAmount = randomFromAmount
                         };
@@ -87,7 +87,7 @@ namespace Concurrency.Demo
 
             var writeDepositTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
+                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
             });
 
             initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -113,7 +113,7 @@ namespace Concurrency.Demo
                         return new TransactionResult<AccountDto>
                         {
                             Data = fromAccount,
-                            Exception = ex,
+                            IsFaulted = true,
                             TransactionStatus = TransactionStatus.Failure,
                             TransferedAmount = randomAmount
                         };
@@ -126,7 +126,7 @@ namespace Concurrency.Demo
 
             var writeWithdrawTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
+                Console.WriteLine($"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status {result.TransactionStatus}");
             });
 
             initGatewayBlock.LinkTo(withdrawFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -155,7 +155,7 @@ namespace Concurrency.Demo
                         return new TransactionResult<AccountDto>
                         {
                             Data = fromAccount,
-                            Exception = ex,
+                            IsFaulted = true,
                             TransactionStatus = TransactionStatus.Failure,
                             TransferedAmount = randomAmount
                         }; ;
@@ -168,11 +168,50 @@ namespace Concurrency.Demo
 
             var writeTransferStatusBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
+                Console.WriteLine($"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
             });
 
             initGatewayBlock.LinkTo(transferBlock, new DataflowLinkOptions { PropagateCompletion = true });
             transferBlock.LinkTo(writeTransferStatusBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            #endregion
+
+            #region Book Ticket 
+            var bookTicketToAccountBlock = new TransformBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>, TransactionResult<AccountDto>>(
+                async (bookingGateway) =>
+                {
+                    AccountDto account = null;
+                    TicketDto ticket = null;
+
+                    try
+                    {
+                        account = await bookingGateway.GetRandomAccount();
+                        ticket = await bookingGateway.GetRandomTicket();
+                        return await bookingGateway.BookTicket(account, ticket);
+                    }
+                    catch (Exception ex)
+                    {
+                        cancellationTokenSource.Cancel();
+                        return new TransactionResult<AccountDto>
+                        {
+                            Data = account,
+                            IsFaulted = true,
+                            TransactionStatus = TransactionStatus.Failure,
+                            TransferedAmount = ticket?.Price ?? 0
+                        };
+                    }
+                }, new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                    CancellationToken = cancellationTokenSource.Token
+                });
+
+            var writeBookingTicketTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
+            {
+                Console.WriteLine($"Transaction ticket booking to {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+            });
+
+            initGatewayBlock.LinkTo(bookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            bookTicketToAccountBlock.LinkTo(writeBookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             for (int i = 0; i < MAX_OPERATIONS; i++)
@@ -188,7 +227,8 @@ namespace Concurrency.Demo
 
                 Task.WhenAll(writeDepositTransactionBlock.Completion,
                     writeWithdrawTransactionBlock.Completion,
-                    writeTransferStatusBlock.Completion)
+                    writeTransferStatusBlock.Completion,
+                    writeBookingTicketTransactionBlock.Completion)
                     .Wait();
             }
             catch (AggregateException ae)

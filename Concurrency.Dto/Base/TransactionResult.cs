@@ -9,7 +9,9 @@ namespace Concurrency.Dto.Base
 
         public double TransferedAmount { set; get; }
 
-        public Exception Exception { set; get; }
+        //public Exception Exception { set; get; }
+
+        public bool IsFaulted { set; get; }
 
         public TransactionStatus TransactionStatus { set; get; }
     }

@@ -79,7 +79,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
@@ -116,7 +116,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
@@ -226,7 +226,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
@@ -289,7 +289,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget because Log.Error is synchronous
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
@@ -346,7 +346,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
@@ -383,7 +383,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
@@ -481,7 +481,7 @@ namespace Concurrency.Services.Generic
             }
             catch(DbUpdateConcurrencyException ex)
             {
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
                 Task.Run(() => Log.Error(ex.Message, ex));
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
@@ -548,7 +548,7 @@ namespace Concurrency.Services.Generic
             catch(Exception ex)
             {
                 //intended fire and forget
-                transactionResult.Exception = ex;
+                transactionResult.IsFaulted = true;
                 Task.Run(() => Log.Error(ex.Message, ex));
             }
 
