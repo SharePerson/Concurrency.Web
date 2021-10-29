@@ -20,6 +20,8 @@ namespace Concurrency.Entities.Banking
         [Timestamp]
         public byte[] RowVersion { set; get; }
 
+        public double Price { set; get; }
+
         [ForeignKey(nameof(ReservedById))]
         public virtual Account Account { set; get; }
     }

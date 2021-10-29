@@ -96,13 +96,16 @@ namespace Concurrency.Entities
                 Balance = 1000
             });
 
+            Random rnd = new();
+
             for(int i = 1; i <= 10000; i++)
             {
                 modelBuilder.Entity<Ticket>().HasData(new Ticket
                 {
                     Id = new Guid(i, 0, 0, new byte[8]),
                     IsAvailable = true,
-                    TicketDate = DateTime.Now.AddDays(i)
+                    TicketDate = DateTime.Now.AddDays(i),
+                    Price = rnd.Next(100, 1000)
                 });
             }
         }

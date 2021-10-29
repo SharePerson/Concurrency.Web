@@ -383,6 +383,19 @@ namespace Concurrency.Services.Generic
             return transactionResult as TransactionResultDT;
         }
 
+        public Task<TransactionResultDT> BookTicket(TicketDto ticket, AccountDtoDT account)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<TicketDto> GetRandomTicket()
+        {
+            Random rnd = new();
+            List<Ticket> ticketEntities = await dbContext.Tickets.ToListAsync();
+            Ticket ticketEntity = ticketEntities[rnd.Next(0, 10000)];
+            return MapObject<Ticket, TicketDto>(ticketEntity);
+        }
+
         public async ValueTask DisposeAsync()
         {
             await dbContext.DisposeAsync();
