@@ -79,6 +79,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
@@ -115,6 +116,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
@@ -224,6 +226,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
 
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
@@ -286,6 +289,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget because Log.Error is synchronous
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
@@ -342,6 +346,8 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
+
                 EntityEntry exEntry = ex.Entries.SingleOrDefault();
 
                 if (exEntry != null)
@@ -377,15 +383,177 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.Exception = ex;
             }
 
             transactionResult.TransactionStatus = TransactionStatus.Failure;
             return transactionResult as TransactionResultDT;
         }
 
-        public Task<TransactionResultDT> BookTicket(TicketDto ticket, AccountDtoDT account)
+        public async Task<TransactionResultDT> BookTicket(AccountDtoDT account, TicketDto ticket)
         {
-            throw new NotImplementedException();
+            TransactionResult<AccountDtoDT> transactionResult = new()
+            {
+                Data = account
+            };
+
+            //if any of the inputs is missing then end the process
+            if (account == null || ticket == null)
+            {
+                transactionResult.TransactionStatus = TransactionStatus.BadInput;
+                return transactionResult as TransactionResultDT;
+            }
+
+            transactionResult.TransferedAmount = ticket.Price;
+
+            try
+            {
+                Account accountToUpdate = await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+
+                //if account is not found in DB for any reason
+                if(accountToUpdate == null)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                Ticket ticketToUpdate = await dbContext.Tickets.FirstOrDefaultAsync(t => t.Id == ticket.Id);
+
+                //if the ticket is not found in DB for any reason
+                if(ticketToUpdate == null)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.TicketNotFound;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if the ticket is booked by someone else
+                if(!ticketToUpdate.IsAvailable)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.TicketAlreadyBooked;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if the account does not have a sufficient balance to book the ticket
+                if(accountToUpdate.Balance < ticketToUpdate.Price)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.InsufficientFunds;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //reject the operation if the ticket datetime is in the past or exactly now 
+                //since the user will take time to actually use the ticket
+                //this should also validate the avg. time taken by the user to actually use the ticket
+                if(ticket.TicketDate <= DateTime.Now)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.TicketDatePassed;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if all the validations above passed, then update EF to include the input RowVersion 
+                //value in any subsequent update queries to account for optimistic concurrency
+                dbContext.Entry(accountToUpdate).Property(nameof(accountToUpdate.RowVersion)).OriginalValue = account.RowVersion;
+                dbContext.Entry(ticketToUpdate).Property(nameof(ticketToUpdate.RowVersion)).OriginalValue = ticket.RowVersion;
+
+                //update the database with the booking as one standalone transaction
+                DateTime operationDate = DateTime.Now;
+
+                accountToUpdate.Balance -= ticket.Price;
+                accountToUpdate.LastTransactionDate = operationDate;
+                ticketToUpdate.IsAvailable = false;
+                ticketToUpdate.ReservationDate = operationDate;
+                ticketToUpdate.ReservedById = accountToUpdate.Id;
+
+                dbContext.Accounts.Update(accountToUpdate);
+                dbContext.Tickets.Update(ticketToUpdate);
+
+                await dbContext.Transactions.AddAsync(new Transaction
+                {
+                    Amount = -ticket.Price,
+                    Description = $"Online booking for ticket {ticketToUpdate.Id}: -{ticketToUpdate.Price}",
+                    Id = Guid.NewGuid(),
+                    AccountId = account.Id,
+                    TransactionDate = operationDate
+                });
+
+                await dbContext.SaveChangesAsync();
+                transactionResult.TransactionStatus = TransactionStatus.Success;
+                return transactionResult as TransactionResultDT;
+            }
+            catch(DbUpdateConcurrencyException ex)
+            {
+                transactionResult.Exception = ex;
+                Task.Run(() => Log.Error(ex.Message, ex));
+
+                EntityEntry exEntry = ex.Entries.SingleOrDefault();
+
+                if(exEntry != null)
+                {
+                    Account accountClientEntry = exEntry.Entity as Account;
+
+                    PropertyValues dbValues = await exEntry.GetDatabaseValuesAsync();
+
+                    if (accountClientEntry != null)
+                    {
+                        if (dbValues == null)
+                        {
+                            transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
+                            return transactionResult as TransactionResultDT;
+                        }
+
+                        Account dbEntry = dbValues.ToObject() as Account;
+
+                        if (dbEntry != null)
+                        {
+                            if (dbEntry.Balance != accountClientEntry.Balance)
+                            {
+                                account.RowVersion = dbEntry.RowVersion;
+                                account.Balance = dbEntry.Balance;
+                                account.LastTransactionDate = dbEntry.LastTransactionDate;
+
+                                transactionResult.TransactionStatus = TransactionStatus.OutdatedAccount;
+                                return transactionResult as TransactionResultDT;
+                            }
+                        }
+                    }
+
+                    Ticket ticketClientEntry = exEntry.Entity as Ticket;
+
+                    if(ticketClientEntry != null)
+                    {
+                        if (dbValues == null)
+                        {
+                            transactionResult.TransactionStatus = TransactionStatus.TicketNotFound;
+                            return transactionResult as TransactionResultDT;
+                        }
+
+                        Ticket dbEntry = dbValues.ToObject() as Ticket;
+
+                        if (dbEntry != null)
+                        {
+                            if (dbEntry.Price != ticketClientEntry.Price)
+                            {
+                                ticket.RowVersion = dbEntry.RowVersion;
+                                ticket.Price = dbEntry.Price;
+                                ticket.IsAvailable = dbEntry.IsAvailable;
+                                ticket.ReservedById = dbEntry.ReservedById;
+                                ticket.ReservationDate = dbEntry.ReservationDate;
+
+                                transactionResult.TransactionStatus = TransactionStatus.OutdatedTicket;
+                                return transactionResult as TransactionResultDT;
+                            }
+                        }
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                //intended fire and forget
+                transactionResult.Exception = ex;
+                Task.Run(() => Log.Error(ex.Message, ex));
+            }
+
+            transactionResult.TransactionStatus = TransactionStatus.Failure;
+            return transactionResult as TransactionResultDT;
         }
 
         public async Task<TicketDto> GetRandomTicket()

@@ -1,4 +1,4 @@
-﻿using Concurrency.Dto.Base;
+﻿using Concurrency.Dto;
 using System;
 using System.Threading.Tasks;
 
@@ -13,5 +13,9 @@ namespace Concurrency.Services.Interfaces.Generic
         Task<TransactionResultDataType> Transfer(AccountDataType fromAccount, AccountDataType toAccount, double amount);
 
         Task<AccountDataType> GetRandomAccount();
+
+        Task<TicketDto> GetRandomTicket();
+
+        Task<TransactionResultDataType> BookTicket(AccountDataType account, TicketDto ticket);
     }
 }
