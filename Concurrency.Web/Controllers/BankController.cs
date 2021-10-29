@@ -1,5 +1,4 @@
 ﻿using Concurrency.Dto;
-using Concurrency.Services.Factories;
 using Concurrency.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,9 +8,9 @@ namespace Concurrency.Web.Controllers
     {
         private readonly ITaskBookingGateway bookingGateway;
 
-        public BankController()
+        public BankController(ITaskBookingGateway bookingGateway)
         {
-            bookingGateway = BookingGatewayFactory.CreateScoped<ITaskBookingGateway>();
+            this.bookingGateway = bookingGateway;
         }
 
         public IActionResult Index()

@@ -2,16 +2,17 @@
 using Concurrency.Services.Interfaces;
 using Concurrency.Services.Interfaces.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace Concurrency.Services.Factories
 {
-    public static class BookingGatewayFactory
+    public class BookingGatewayFactory<InstanceType>: IBookingGatewayFactory<InstanceType> where InstanceType: IAsyncDisposable
     {
-        public static InstanceType Create<InstanceType>() where InstanceType: class
+        public InstanceType Create()
         {
             var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false);
             var configuration = builder.Build();
@@ -25,12 +26,13 @@ namespace Concurrency.Services.Factories
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
                 .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
+                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>))
                 .BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
         }
 
-        public static InstanceType CreateSqlite<InstanceType>() where InstanceType : class
+        public InstanceType CreateSqlite()
         {
             var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false);
             var configuration = builder.Build();
@@ -43,12 +45,13 @@ namespace Concurrency.Services.Factories
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
                 .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
+                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>))
                 .BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
         }
 
-        public static InstanceType CreateScoped<InstanceType>() where InstanceType : class
+        public InstanceType CreateScoped()
         {
             var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false);
             var configuration = builder.Build();
@@ -63,11 +66,6 @@ namespace Concurrency.Services.Factories
                 .BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
-        }
-
-        public static async Task DisposeAsync<InstanceType>(InstanceType instance) where InstanceType: IAsyncDisposable
-        {
-            await instance.DisposeAsync();
         }
     }
 }

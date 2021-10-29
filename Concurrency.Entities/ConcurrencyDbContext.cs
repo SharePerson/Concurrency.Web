@@ -21,6 +21,8 @@ namespace Concurrency.Entities
 
         public DbSet<Transaction> Transactions { set; get; }
 
+        public DbSet<Ticket> Tickets { set; get; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -93,6 +95,16 @@ namespace Concurrency.Entities
                 AccountHolderName = "User 5",
                 Balance = 1000
             });
+
+            for(int i = 1; i <= 10000; i++)
+            {
+                modelBuilder.Entity<Ticket>().HasData(new Ticket
+                {
+                    Id = new Guid(i, 0, 0, new byte[8]),
+                    IsAvailable = true,
+                    TicketDate = DateTime.Now.AddDays(i)
+                });
+            }
         }
     }
 }

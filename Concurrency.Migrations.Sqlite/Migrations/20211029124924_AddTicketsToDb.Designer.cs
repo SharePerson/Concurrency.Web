@@ -3,14 +3,16 @@ using System;
 using Concurrency.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Concurrency.Migrations.Sqlite.Migrations
 {
     [DbContext(typeof(ConcurrencyDbContext))]
-    partial class ConcurrencyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20211029124924_AddTicketsToDb")]
+    partial class AddTicketsToDb
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

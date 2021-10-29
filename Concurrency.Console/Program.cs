@@ -1,10 +1,15 @@
 ﻿using Concurrency.Dto;
 using Concurrency.Dto.Base;
 using Concurrency.Dto.Enums;
+using Concurrency.Entities;
 using Concurrency.Services.Factories;
 using Concurrency.Services.Interfaces.Generic;
 using log4net;
 using log4net.Config;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.IO;
 using System.Reflection;
@@ -14,7 +19,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace Concurrency.Demo
 {
-    class Program
+    class Program: IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
         private const int MAX_OPERATIONS = 1000;
         private const int MAX_PARALLEL_OPERATIONS = 10;
@@ -27,6 +32,13 @@ namespace Concurrency.Demo
 
         static void Main(string[] args)
         {
+            Program program = new();
+            BookingGatewayFactory<IBookingGateway<TransactionResult<AccountDto>, AccountDto>> gatewayFactory = new();
+            using (ConcurrencyDbContext dbContext = program.CreateDbContext(null))
+            {
+                dbContext.Database.Migrate();
+            }
+
             #region Banking with Async Gateway
             ThreadPool.SetMinThreads(8, 8);
             ThreadPool.SetMaxThreads(32767, 1000);
@@ -38,7 +50,8 @@ namespace Concurrency.Demo
             {
                 var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
                 XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
-                return BookingGatewayFactory.CreateSqlite<IBookingGateway<TransactionResult<AccountDto>, AccountDto>>();
+                BookingGatewayFactory<IBookingGateway<TransactionResult<AccountDto>, AccountDto>> gatewayFactory = new();
+                return gatewayFactory.CreateSqlite();
             });
             #endregion
 
@@ -74,7 +87,7 @@ namespace Concurrency.Demo
 
             var writeDepositTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null? result.Exception.ToString(): result.TransactionStatus)}");
+                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.Exception != null ? result.Exception.ToString() : result.TransactionStatus)}");
             });
 
             initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -191,6 +204,22 @@ namespace Concurrency.Demo
                 Console.WriteLine("Encountered Main Exception {0}: {1}", ex.GetType().Name, ex.Message);
             }
             #endregion
+        }
+
+        public ConcurrencyDbContext CreateDbContext(string[] args)
+        {
+            var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false)
+            .SetBasePath(Directory.GetCurrentDirectory());
+            var configuration = builder.Build();
+
+            ServiceProvider serviceProvider = new ServiceCollection()
+                .AddDbContext<ConcurrencyDbContext>(options => options.UseSqlite(configuration.GetConnectionString("SqliteConnection"), builder =>
+                {
+                    builder.MigrationsAssembly("Concurrency.Migrations.Sqlite");
+                }), ServiceLifetime.Transient)
+                .BuildServiceProvider();
+
+            return serviceProvider.GetRequiredService<ConcurrencyDbContext>();
         }
     }
 }
