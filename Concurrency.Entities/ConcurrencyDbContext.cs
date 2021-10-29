@@ -98,11 +98,12 @@ namespace Concurrency.Entities
 
             Random rnd = new();
 
+            //add 10K tickets every migration
             for(int i = 1; i <= 10000; i++)
             {
                 modelBuilder.Entity<Ticket>().HasData(new Ticket
                 {
-                    Id = new Guid(i, 0, 0, new byte[8]),
+                    Id = Guid.NewGuid(),
                     IsAvailable = true,
                     TicketDate = DateTime.Now.AddDays(i),
                     Price = rnd.Next(100, 1000)

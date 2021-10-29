@@ -10,7 +10,7 @@ namespace Concurrency.Services.Base
             where SourceType : class
             where DestinationType : class
         {
-            return Omu.ValueInjecter.Mapper.Map<SourceType, DestinationType>(source);
+            return source != null ? Omu.ValueInjecter.Mapper.Map<SourceType, DestinationType>(source) : null;
         }
 
         protected IEnumerable<DestinationType> MapList<SourceType, DestinationType>(IEnumerable<SourceType> sourceList)

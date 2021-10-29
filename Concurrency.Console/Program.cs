@@ -21,7 +21,7 @@ namespace Concurrency.Demo
 {
     class Program : IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
-        private const int MAX_OPERATIONS = 10000;
+        private const int MAX_OPERATIONS = 1000;
         private const int MAX_PARALLEL_OPERATIONS = 10;
         private const int MIN_DEPOSIT = 100;
         private const int MAX_DEPOSIT = 1000;
@@ -87,7 +87,7 @@ namespace Concurrency.Demo
 
             var writeDepositTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
             });
 
             initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -212,6 +212,46 @@ namespace Concurrency.Demo
 
             initGatewayBlock.LinkTo(bookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
             bookTicketToAccountBlock.LinkTo(writeBookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            #endregion
+
+            #region Unbook Ticket 
+            var unbookTicketToAccountBlock = new TransformBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>, TransactionResult<AccountDto>>(
+                async (bookingGateway) =>
+                {
+                    AccountDto account = null;
+                    TicketDto ticket = null;
+
+                    try
+                    {
+                        ticket = await bookingGateway.GetRandomTicket(isAvailable: false);
+                        account = await bookingGateway.GetTicketOwner(ticket?.Id ?? Guid.Empty);
+
+                        return await bookingGateway.UnbookTicket(account, ticket);
+                    }
+                    catch (Exception ex)
+                    {
+                        cancellationTokenSource.Cancel();
+                        return new TransactionResult<AccountDto>
+                        {
+                            Data = account,
+                            IsFaulted = true,
+                            TransactionStatus = TransactionStatus.Failure,
+                            TransferedAmount = ticket?.Price ?? 0
+                        };
+                    }
+                }, new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                    CancellationToken = cancellationTokenSource.Token
+                });
+
+            var writeUnbookingTicketTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
+            {
+                Console.WriteLine($"Transaction ticket unbooking from {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+            });
+
+            initGatewayBlock.LinkTo(unbookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            unbookTicketToAccountBlock.LinkTo(writeUnbookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             for (int i = 0; i < MAX_OPERATIONS; i++)

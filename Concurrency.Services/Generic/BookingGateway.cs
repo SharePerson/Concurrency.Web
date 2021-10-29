@@ -435,7 +435,7 @@ namespace Concurrency.Services.Generic
                 //reject the operation if the ticket datetime is in the past or exactly now 
                 //since the user will take time to actually use the ticket
                 //this should also validate the avg. time taken by the user to actually use the ticket
-                if(ticket.TicketDate <= DateTime.Now)
+                if((ticketToUpdate.TicketDate - DateTime.Now).TotalDays <= 1)
                 {
                     transactionResult.TransactionStatus = TransactionStatus.TicketDatePassed;
                     return transactionResult as TransactionResultDT;
@@ -461,7 +461,7 @@ namespace Concurrency.Services.Generic
                 await dbContext.Transactions.AddAsync(new Transaction
                 {
                     Amount = -ticket.Price,
-                    Description = $"Online booking for ticket {ticketToUpdate.Id}: -{ticketToUpdate.Price}",
+                    Description = $"Online booking for ticket {ticketToUpdate.Id}: -${ticketToUpdate.Price}",
                     Id = Guid.NewGuid(),
                     AccountId = account.Id,
                     TransactionDate = operationDate
@@ -548,12 +548,164 @@ namespace Concurrency.Services.Generic
             return transactionResult as TransactionResultDT;
         }
 
-        public async Task<TicketDto> GetRandomTicket()
+        public async Task<TransactionResultDT> UnbookTicket(AccountDtoDT account, TicketDto ticket)
+        {
+            TransactionResult<AccountDtoDT> transactionResult = new()
+            {
+                Data = account
+            };
+
+            if (account == null || ticket == null)
+            {
+                transactionResult.TransactionStatus = TransactionStatus.BadInput;
+                return transactionResult as TransactionResultDT;
+            }
+
+            transactionResult.TransferedAmount = ticket.Price;
+
+            try
+            {
+                Account accountToUpdate = await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+
+                //if account is not found in DB for any reason
+                if (accountToUpdate == null)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                Ticket ticketToUpdate = await dbContext.Tickets.FirstOrDefaultAsync(t => t.Id == ticket.Id);
+
+                //if the ticket is not found in DB for any reason
+                if (ticketToUpdate == null)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.TicketNotFound;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if the ticket is available then it does not make sense to unbook it
+                //or if the ticket data was tampered in the db by nulling the ReservedById
+                //or if the ticket is not reserved by the input account
+                //and consider this a bad input and terminate
+                if(ticketToUpdate.IsAvailable || ticket.ReservedById == null || account.Id != ticket.ReservedById)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.BadInput;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if the ticket datetime passed, then it is not valid anymore to be available again
+                //and the account is not eligible to be refunded
+                if((ticketToUpdate.TicketDate - DateTime.Now).TotalDays <= 1)
+                {
+                    transactionResult.TransactionStatus = TransactionStatus.TicketDatePassed;
+                    return transactionResult as TransactionResultDT;
+                }
+
+                //if all the validations above passed, then update EF to include the input RowVersion 
+                //value in any subsequent update queries to account for optimistic concurrency
+                //the ticket to be released is not subject to optimistic concurrency since it's not available to the public
+                //we care only about the account against optimistic concurrency
+                dbContext.Entry(accountToUpdate).Property(nameof(accountToUpdate.RowVersion)).OriginalValue = account.RowVersion;
+
+                //update the database with the booking as one standalone transaction
+                DateTime operationDate = DateTime.Now;
+
+                accountToUpdate.Balance += ticket.Price;
+                accountToUpdate.LastTransactionDate = operationDate;
+                ticketToUpdate.IsAvailable = true;
+                ticketToUpdate.ReservationDate = null;
+                ticketToUpdate.ReservedById = null;
+
+                dbContext.Accounts.Update(accountToUpdate);
+                dbContext.Tickets.Update(ticketToUpdate);
+
+                await dbContext.Transactions.AddAsync(new Transaction
+                {
+                    Amount = ticket.Price,
+                    Description = $"Refund for online ticket {ticketToUpdate.Id}: +${ticketToUpdate.Price}",
+                    Id = Guid.NewGuid(),
+                    AccountId = account.Id,
+                    TransactionDate = operationDate
+                });
+
+                await dbContext.SaveChangesAsync();
+                transactionResult.TransactionStatus = TransactionStatus.Success;
+                return transactionResult as TransactionResultDT;
+            }
+            catch(DbUpdateConcurrencyException ex)
+            {
+                //intended fire and forget
+                Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.IsFaulted = true;
+
+                EntityEntry exEntry = ex.Entries.SingleOrDefault();
+
+                if (exEntry != null)
+                {
+                    Account clientEntry = exEntry.Entity as Account;
+
+                    if (clientEntry != null)
+                    {
+                        PropertyValues dbValues = await exEntry.GetDatabaseValuesAsync();
+
+                        if (dbValues == null)
+                        {
+                            transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
+                            return transactionResult as TransactionResultDT;
+                        }
+
+                        Account dbEntry = dbValues.ToObject() as Account;
+
+                        if (dbEntry != null)
+                        {
+                            if (dbEntry.Balance != clientEntry.Balance)
+                            {
+                                account.RowVersion = dbEntry.RowVersion;
+                                account.Balance = dbEntry.Balance;
+                                transactionResult.TransactionStatus = TransactionStatus.OutdatedAccount;
+                                return transactionResult as TransactionResultDT;
+                            }
+                        }
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                Task.Run(() => Log.Error(ex.Message, ex));
+                transactionResult.IsFaulted = true;
+            }
+
+            transactionResult.TransactionStatus = TransactionStatus.Failure;
+            return transactionResult as TransactionResultDT;
+        }
+
+        public async Task<TicketDto> GetRandomTicket(bool? isAvailable = null)
         {
             Random rand = new();
-            int toSkip = rand.Next(0, 10000);
-            Ticket ticketEntity = await dbContext.Tickets.OrderBy(t => t.Id).Skip(toSkip).Take(1).FirstOrDefaultAsync();
+            IQueryable<Ticket> ticketQuery = null;
+
+            if(isAvailable.HasValue)
+            {
+                ticketQuery = dbContext.Tickets.Where(t => t.IsAvailable == isAvailable);
+            }
+            else
+            {
+                ticketQuery = dbContext.Tickets.AsQueryable();
+            }
+
+            int toSkip = rand.Next(0, await ticketQuery.CountAsync());
+
+            Ticket ticketEntity = await ticketQuery.OrderBy(t => t.Id).Skip(toSkip).Take(1).FirstOrDefaultAsync();
             return MapObject<Ticket, TicketDto>(ticketEntity);
+        }
+
+        public async Task<AccountDto> GetTicketOwner(Guid ticketId)
+        {
+            Account accountEntity = await dbContext.Tickets
+                .Include(t => t.Account).Where(t => t.Id == ticketId)
+                .Select(t => t.Account).FirstOrDefaultAsync();
+
+            return MapObject<Account, AccountDto>(accountEntity);
         }
 
         public async ValueTask DisposeAsync()

@@ -14,8 +14,12 @@ namespace Concurrency.Services.Interfaces.Generic
 
         Task<AccountDataType> GetRandomAccount();
 
-        Task<TicketDto> GetRandomTicket();
+        Task<TicketDto> GetRandomTicket(bool? isAvailable = null);
 
         Task<TransactionResultDataType> BookTicket(AccountDataType account, TicketDto ticket);
+
+        Task<TransactionResultDataType> UnbookTicket(AccountDataType account, TicketDto ticket);
+
+        Task<AccountDto> GetTicketOwner(Guid ticketId);
     }
 }
