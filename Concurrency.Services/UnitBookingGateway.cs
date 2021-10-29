@@ -1,8 +1,8 @@
-﻿using Concurrency.Dto;
+﻿using AutoMapper;
+using Concurrency.Dto;
 using Concurrency.Dto.Enums;
 using Concurrency.Entities.Banking;
 using Concurrency.Repositories.Interfaces;
-using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces;
 using log4net;
 using Microsoft.EntityFrameworkCore;
@@ -14,19 +14,21 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Services
 {
-    public class UnitBookingGateway : Mapper, IBookingGateway
+    public class UnitBookingGateway : IBookingGateway
     {
         private readonly IAccountRepository accountRepository;
         private readonly ITransactionRepository transactionRepository;
         private readonly IUnitOfWork unitOfWork;
+        private readonly IMapper mapper;
 
         private ILog Log => LogManager.GetLogger(typeof(BookingGateway));
 
-        public UnitBookingGateway(IAccountRepository accountRepository, ITransactionRepository transactionRepository, IUnitOfWork unitOfWork)
+        public UnitBookingGateway(IAccountRepository accountRepository, ITransactionRepository transactionRepository, IUnitOfWork unitOfWork, IMapper mapper)
         {
             this.accountRepository = accountRepository;
             this.transactionRepository = transactionRepository;
             this.unitOfWork = unitOfWork;
+            this.mapper = mapper;
         }
 
         public async Task<TransactionStatus> Deposit(AccountDto account, double amount)
@@ -118,7 +120,7 @@ namespace Concurrency.Services
             Random random = new Random();
 
             Guid randomeAccountId = Guid.Parse(guids[random.Next(0, 5)]);
-            return MapObject<Account, AccountDto>(await accountRepository.Get(a => a.Id == randomeAccountId));
+            return mapper.Map<AccountDto>(await accountRepository.Get(a => a.Id == randomeAccountId));
         }
 
         public async Task<TransactionStatus> Transfer(AccountDto fromAccount, AccountDto toAccount, double amount)

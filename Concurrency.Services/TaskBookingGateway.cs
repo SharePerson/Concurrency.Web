@@ -1,13 +1,12 @@
 ﻿using Concurrency.Dto;
 using Concurrency.Dto.Enums;
-using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces;
 using System;
 using System.Threading.Tasks;
 
 namespace Concurrency.Services
 {
-    public class TaskBookingGateway : Mapper, ITaskBookingGateway
+    public class TaskBookingGateway : ITaskBookingGateway
     {
         private readonly IBookingGateway bookingGateway;
 

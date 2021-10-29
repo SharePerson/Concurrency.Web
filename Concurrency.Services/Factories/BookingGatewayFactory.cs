@@ -1,4 +1,5 @@
-﻿using Concurrency.Entities;
+﻿using AutoMapper;
+using Concurrency.Entities;
 using Concurrency.Services.Generic;
 using Concurrency.Services.Interfaces;
 using Concurrency.Services.Interfaces.Generic;
@@ -16,7 +17,7 @@ namespace Concurrency.Services.Factories
             var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false);
             var configuration = builder.Build();
 
-            ServiceProvider serviceProvider = new ServiceCollection()
+            IServiceCollection services = new ServiceCollection()
                 .AddDbContext<ConcurrencyDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
                     builder.MigrationsAssembly("Concurrency.Migrations");
@@ -25,8 +26,14 @@ namespace Concurrency.Services.Factories
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
                 .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
-                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>))
-                .BuildServiceProvider();
+                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>));
+                
+
+            IMapper mapper = MappingConfig.RegisterMaps().CreateMapper();
+            services.AddSingleton(mapper);
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+            IServiceProvider serviceProvider = services.BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
         }
@@ -36,7 +43,7 @@ namespace Concurrency.Services.Factories
             var builder = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false);
             var configuration = builder.Build();
 
-            ServiceProvider serviceProvider = new ServiceCollection()
+            IServiceCollection services = new ServiceCollection()
                 .AddDbContext<ConcurrencyDbContext>(options => options.UseSqlite(configuration.GetConnectionString("SqliteConnection"), builder =>
                 {
                     builder.MigrationsAssembly("Concurrency.Migrations.Sqlite");
@@ -44,8 +51,13 @@ namespace Concurrency.Services.Factories
                 .AddTransient<ITaskBookingGateway, TaskBookingGateway>()
                 .AddTransient<IBookingGateway, BookingGateway>()
                 .AddTransient(typeof(IBookingGateway<,>), typeof(BookingGateway<,>))
-                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>))
-                .BuildServiceProvider();
+                .AddTransient(typeof(IBookingGatewayFactory<>), typeof(BookingGatewayFactory<>));
+
+            IMapper mapper = MappingConfig.RegisterMaps().CreateMapper();
+            services.AddSingleton(mapper);
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+            IServiceProvider serviceProvider = services.BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<InstanceType>();
         }

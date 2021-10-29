@@ -1,7 +1,7 @@
-﻿using Concurrency.Dto;
+﻿using AutoMapper;
+using Concurrency.Dto;
 using Concurrency.Dto.Responses;
 using Concurrency.Entities;
-using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -11,14 +11,16 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Services
 {
-    public class BookingService : Mapper, IBookingService
+    public class BookingService : IBookingService
     {
 
         private readonly ConcurrencyDbContext dbContext;
+        private readonly IMapper mapper;
 
-        public BookingService(ConcurrencyDbContext dbContext)
+        public BookingService(ConcurrencyDbContext dbContext, IMapper mapper)
         {
             this.dbContext = dbContext;
+            this.mapper = mapper;
         }
 
         public async Task<string> ReserveSlot(BookingDto bookingDto)
@@ -97,11 +99,11 @@ namespace Concurrency.Services
 
             if (booking == null) return new BookingDto
             {
-                Slot = MapObject<Slot, SlotModel>(await dbContext.Slots.FirstOrDefaultAsync(s => s.Id == slotId)),
+                Slot = mapper.Map<SlotModel>(await dbContext.Slots.FirstOrDefaultAsync(s => s.Id == slotId)),
                 SlotId = slotId
             };
 
-            return MapObject<Booking, BookingDto>(booking);
+            return mapper.Map<BookingDto>(booking);
         }
 
         public async Task<OperationResponse<BookingDto>> UpdateBooking(BookingDto bookingDto)

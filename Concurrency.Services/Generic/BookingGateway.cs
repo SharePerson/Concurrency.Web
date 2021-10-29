@@ -1,9 +1,9 @@
-﻿using Concurrency.Dto;
+﻿using AutoMapper;
+using Concurrency.Dto;
 using Concurrency.Dto.Base;
 using Concurrency.Dto.Enums;
 using Concurrency.Entities;
 using Concurrency.Entities.Banking;
-using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces.Generic;
 using log4net;
 using Microsoft.EntityFrameworkCore;
@@ -22,15 +22,17 @@ namespace Concurrency.Services.Generic
     /// </summary>
     /// <typeparam name="TransactionStatusDT"></typeparam>
     /// <typeparam name="AccountDtoDT"></typeparam>
-    public class BookingGateway<TransactionResultDT, AccountDtoDT> : Mapper, IBookingGateway<TransactionResultDT, AccountDtoDT> where AccountDtoDT : AccountBase where TransactionResultDT : TransactionResult<AccountDtoDT>
+    public class BookingGateway<TransactionResultDT, AccountDtoDT> : IBookingGateway<TransactionResultDT, AccountDtoDT> where AccountDtoDT : AccountBase where TransactionResultDT : TransactionResult<AccountDtoDT>
     {
         private readonly ConcurrencyDbContext dbContext;
+        private readonly IMapper mapper;
 
         private ILog Log => LogManager.GetLogger(typeof(BookingGateway));
 
-        public BookingGateway(ConcurrencyDbContext dbContext)
+        public BookingGateway(ConcurrencyDbContext dbContext, IMapper mapper)
         {
             this.dbContext = dbContext;
+            this.mapper = mapper;
         }
 
         public async Task<TransactionResultDT> Deposit(AccountDtoDT account, double amount)
@@ -127,9 +129,9 @@ namespace Concurrency.Services.Generic
         {
             Random rand = new();
             int toSkip = rand.Next(0, 5);
-            return MapObject<Account, AccountDto>(await dbContext.Accounts.OrderBy(a => a.Id)
+            return mapper.Map<AccountDtoDT>(await dbContext.Accounts.OrderBy(a => a.Id)
                 .Skip(toSkip).Take(1)
-                .FirstOrDefaultAsync()) as AccountDtoDT;
+                .FirstOrDefaultAsync());
         }
 
         public async Task<TransactionResultDT> Transfer(AccountDtoDT fromAccount, AccountDtoDT toAccount, double amount)
@@ -696,16 +698,16 @@ namespace Concurrency.Services.Generic
             int toSkip = rand.Next(0, await ticketQuery.CountAsync());
 
             Ticket ticketEntity = await ticketQuery.OrderBy(t => t.Id).Skip(toSkip).Take(1).FirstOrDefaultAsync();
-            return MapObject<Ticket, TicketDto>(ticketEntity);
+            return mapper.Map<TicketDto>(ticketEntity);
         }
 
-        public async Task<AccountDto> GetTicketOwner(Guid ticketId)
+        public async Task<AccountDtoDT> GetTicketOwner(Guid ticketId)
         {
             Account accountEntity = await dbContext.Tickets
                 .Include(t => t.Account).Where(t => t.Id == ticketId)
                 .Select(t => t.Account).FirstOrDefaultAsync();
 
-            return MapObject<Account, AccountDto>(accountEntity);
+            return mapper.Map<AccountDtoDT>(accountEntity);
         }
 
         public async ValueTask DisposeAsync()

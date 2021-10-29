@@ -20,6 +20,6 @@ namespace Concurrency.Services.Interfaces.Generic
 
         Task<TransactionResultDataType> UnbookTicket(AccountDataType account, TicketDto ticket);
 
-        Task<AccountDto> GetTicketOwner(Guid ticketId);
+        Task<AccountDataType> GetTicketOwner(Guid ticketId);
     }
 }

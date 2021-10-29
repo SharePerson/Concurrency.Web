@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -22,7 +23,7 @@ namespace Concurrency.Demo
     class Program : IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
         private const int MAX_OPERATIONS = 1000;
-        private const int MAX_PARALLEL_OPERATIONS = 10;
+        private const int MAX_PARALLEL_OPERATIONS = 100;
         private const int MIN_DEPOSIT = 100;
         private const int MAX_DEPOSIT = 1000;
         private const int MIN_WITHDRAW = 200;
@@ -40,10 +41,9 @@ namespace Concurrency.Demo
             }
 
             #region Banking with Async Gateway
-            ThreadPool.SetMinThreads(8, 8);
-            ThreadPool.SetMaxThreads(32767, 1000);
-
             CancellationTokenSource cancellationTokenSource = new();
+
+            ConcurrentBag<string> concurrentBag = new();
 
             #region Init Gateway in a Broadcast
             var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>>((gateway) =>
@@ -87,11 +87,9 @@ namespace Concurrency.Demo
 
             var writeDepositTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+                string message = $"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
+                concurrentBag.Add(message);
             });
-
-            initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
-            depositFromAccountBlock.LinkTo(writeDepositTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             #region Withdraw from Account Stage
@@ -126,11 +124,9 @@ namespace Concurrency.Demo
 
             var writeWithdrawTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status {result.TransactionStatus}");
+                string message = $"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status {result.TransactionStatus}";
+                concurrentBag.Add(message);
             });
-
-            initGatewayBlock.LinkTo(withdrawFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
-            withdrawFromAccountBlock.LinkTo(writeWithdrawTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             #region Transfer between Accounts Stags
@@ -168,11 +164,9 @@ namespace Concurrency.Demo
 
             var writeTransferStatusBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+                string message = $"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
+                concurrentBag.Add(message);
             });
-
-            initGatewayBlock.LinkTo(transferBlock, new DataflowLinkOptions { PropagateCompletion = true });
-            transferBlock.LinkTo(writeTransferStatusBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             #region Book Ticket 
@@ -207,11 +201,9 @@ namespace Concurrency.Demo
 
             var writeBookingTicketTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction ticket booking to {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+                string message = $"Transaction ticket booking to {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
+                concurrentBag.Add(message);
             });
-
-            initGatewayBlock.LinkTo(bookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
-            bookTicketToAccountBlock.LinkTo(writeBookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
             #endregion
 
             #region Unbook Ticket 
@@ -247,8 +239,23 @@ namespace Concurrency.Demo
 
             var writeUnbookingTicketTransactionBlock = new ActionBlock<TransactionResult<AccountDto>>(result =>
             {
-                Console.WriteLine($"Transaction ticket unbooking from {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}");
+                string message = $"Transaction ticket unbooking from {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
+                concurrentBag.Add(message);
             });
+            #endregion
+
+            #region Build the data flow network
+            initGatewayBlock.LinkTo(depositFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            depositFromAccountBlock.LinkTo(writeDepositTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
+
+            initGatewayBlock.LinkTo(withdrawFromAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            withdrawFromAccountBlock.LinkTo(writeWithdrawTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
+
+            initGatewayBlock.LinkTo(transferBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            transferBlock.LinkTo(writeTransferStatusBlock, new DataflowLinkOptions { PropagateCompletion = true });
+
+            initGatewayBlock.LinkTo(bookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            bookTicketToAccountBlock.LinkTo(writeBookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
 
             initGatewayBlock.LinkTo(unbookTicketToAccountBlock, new DataflowLinkOptions { PropagateCompletion = true });
             unbookTicketToAccountBlock.LinkTo(writeUnbookingTicketTransactionBlock, new DataflowLinkOptions { PropagateCompletion = true });
@@ -270,6 +277,11 @@ namespace Concurrency.Demo
                     writeTransferStatusBlock.Completion,
                     writeBookingTicketTransactionBlock.Completion)
                     .Wait();
+
+                Parallel.ForEach(concurrentBag, message =>
+                {
+                    Console.WriteLine(message);
+                });
             }
             catch (AggregateException ae)
             {

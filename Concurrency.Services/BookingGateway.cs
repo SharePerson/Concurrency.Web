@@ -1,8 +1,8 @@
-﻿using Concurrency.Dto;
+﻿using AutoMapper;
+using Concurrency.Dto;
 using Concurrency.Dto.Enums;
 using Concurrency.Entities;
 using Concurrency.Entities.Banking;
-using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces;
 using log4net;
 using Microsoft.EntityFrameworkCore;
@@ -14,15 +14,17 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Services
 {
-    public class BookingGateway : Mapper, IBookingGateway
+    public class BookingGateway : IBookingGateway
     {
         private readonly ConcurrencyDbContext dbContext;
+        private readonly IMapper mapper;
 
         private ILog Log => LogManager.GetLogger(typeof(BookingGateway));
 
-        public BookingGateway(ConcurrencyDbContext dbContext)
+        public BookingGateway(ConcurrencyDbContext dbContext, IMapper mapper)
         {
             this.dbContext = dbContext;
+            this.mapper = mapper;
         }
 
         /// <summary>
@@ -312,7 +314,7 @@ namespace Concurrency.Services
             Random random = new Random();
 
             Guid randomeAccountId = Guid.Parse(guids[random.Next(0, 5)]);
-            return MapObject<Account, AccountDto>(await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == randomeAccountId));
+            return mapper.Map<AccountDto>(await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == randomeAccountId));
         }
 
         public async ValueTask DisposeAsync()
