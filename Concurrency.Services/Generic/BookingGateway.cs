@@ -4,6 +4,7 @@ using Concurrency.Dto.Base;
 using Concurrency.Dto.Enums;
 using Concurrency.Entities;
 using Concurrency.Entities.Banking;
+using Concurrency.Services.Base;
 using Concurrency.Services.Interfaces.Generic;
 using log4net;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,8 @@ namespace Concurrency.Services.Generic
     /// </summary>
     /// <typeparam name="TransactionStatusDT"></typeparam>
     /// <typeparam name="AccountDtoDT"></typeparam>
-    public class BookingGateway<TransactionResultDT, AccountDtoDT> : IBookingGateway<TransactionResultDT, AccountDtoDT> where AccountDtoDT : AccountBase where TransactionResultDT : TransactionResult<AccountDtoDT>
+    public class BookingGateway<TransactionResultDT, AccountDtoDT> : BookingGatewayBase<TransactionResultDT, AccountDtoDT>, IBookingGateway<TransactionResultDT, AccountDtoDT> 
+        where AccountDtoDT : AccountBase where TransactionResultDT : TransactionResult<AccountDtoDT>
     {
         private readonly ConcurrencyDbContext dbContext;
         private readonly IMapper mapper;
@@ -81,38 +83,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.IsFaulted = true;
-
-                EntityEntry exEntry = ex.Entries.SingleOrDefault();
-
-                if (exEntry != null)
-                {
-                    Account clientEntry = exEntry.Entity as Account;
-
-                    if (clientEntry != null)
-                    {
-                        PropertyValues dbValues = await exEntry.GetDatabaseValuesAsync();
-
-                        if (dbValues == null)
-                        {
-                            transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
-                            return transactionResult as TransactionResultDT;
-                        }
-
-                        Account dbEntry = dbValues.ToObject() as Account;
-
-                        if (dbEntry != null)
-                        {
-                            if (dbEntry.Balance != clientEntry.Balance)
-                            {
-                                account.RowVersion = dbEntry.RowVersion;
-                                account.Balance = dbEntry.Balance;
-                                transactionResult.TransactionStatus = TransactionStatus.OutdatedAccount;
-                                return transactionResult as TransactionResultDT;
-                            }
-                        }
-                    }
-                }
+                transactionResult = await HandleAccountConcurrencyErrors(transactionResult, ex, account);
             }
             catch (Exception ex)
             {
@@ -340,38 +311,7 @@ namespace Concurrency.Services.Generic
             {
                 //intended fire and forget
                 Task.Run(() => Log.Error(ex.Message, ex));
-                transactionResult.IsFaulted = true;
-
-                EntityEntry exEntry = ex.Entries.SingleOrDefault();
-
-                if (exEntry != null)
-                {
-                    Account clientEntry = exEntry.Entity as Account;
-
-                    if (clientEntry != null)
-                    {
-                        PropertyValues dbValues = await exEntry.GetDatabaseValuesAsync();
-
-                        if (dbValues == null)
-                        {
-                            transactionResult.TransactionStatus = TransactionStatus.AccountNotFound;
-                            return transactionResult as TransactionResultDT;
-                        }
-
-                        Account dbEntry = dbValues.ToObject() as Account;
-
-                        if (dbEntry != null)
-                        {
-                            if (dbEntry.Balance != clientEntry.Balance)
-                            {
-                                account.RowVersion = dbEntry.RowVersion;
-                                account.Balance = dbEntry.Balance;
-                                transactionResult.TransactionStatus = TransactionStatus.OutdatedAccount;
-                                return transactionResult as TransactionResultDT;
-                            }
-                        }
-                    }
-                }
+                transactionResult = await HandleAccountConcurrencyErrors(transactionResult, ex, account);
             }
             catch (Exception ex)
             {
