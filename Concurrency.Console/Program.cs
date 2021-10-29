@@ -22,19 +22,18 @@ namespace Concurrency.Demo
 {
     class Program : IDesignTimeDbContextFactory<ConcurrencyDbContext>
     {
-        private const int MAX_OPERATIONS = 1000;
-        private const int MAX_PARALLEL_OPERATIONS = 100;
-        private const int MIN_DEPOSIT = 100;
-        private const int MAX_DEPOSIT = 1000;
-        private const int MIN_WITHDRAW = 200;
-        private const int MAX_WITHDRAW = 500;
+        private const int MAX_OPERATIONS = 10000;
+        private const int MAX_PARALLEL_OPERATIONS = 1000;
+        private const int MIN_DEPOSIT = 500;
+        private const int MAX_DEPOSIT = 5000;
+        private const int MIN_WITHDRAW = 500;
+        private const int MAX_WITHDRAW = 2500;
         private const int MIN_TRANSFER = 500;
         private const int MAX_TRANSFER = 700;
 
         static void Main(string[] args)
         {
             Program program = new();
-            BookingGatewayFactory<IBookingGateway<TransactionResult<AccountDto>, AccountDto>> gatewayFactory = new();
             using (ConcurrencyDbContext dbContext = program.CreateDbContext(null))
             {
                 dbContext.Database.Migrate();
@@ -46,12 +45,18 @@ namespace Concurrency.Demo
             ConcurrentBag<string> concurrentBag = new();
 
             #region Init Gateway in a Broadcast
+            var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
+            XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
+            BookingGatewayFactory<IBookingGateway<TransactionResult<AccountDto>, AccountDto>> gatewayFactory = new();
+
             var initGatewayBlock = new BroadcastBlock<IBookingGateway<TransactionResult<AccountDto>, AccountDto>>((gateway) =>
             {
-                var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
-                XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
-                BookingGatewayFactory<IBookingGateway<TransactionResult<AccountDto>, AccountDto>> gatewayFactory = new();
                 return gatewayFactory.CreateSqlite();
+            }, 
+            new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                CancellationToken = cancellationTokenSource.Token
             });
             #endregion
 
@@ -89,6 +94,7 @@ namespace Concurrency.Demo
             {
                 string message = $"Transaction deposit to account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
                 concurrentBag.Add(message);
+                Console.WriteLine(message);
             });
             #endregion
 
@@ -126,6 +132,12 @@ namespace Concurrency.Demo
             {
                 string message = $"Transaction withdraw from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status {result.TransactionStatus}";
                 concurrentBag.Add(message);
+                Console.WriteLine(message);
+            }
+            , new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                CancellationToken = cancellationTokenSource.Token
             });
             #endregion
 
@@ -166,6 +178,12 @@ namespace Concurrency.Demo
             {
                 string message = $"Transfer status from account {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
                 concurrentBag.Add(message);
+                Console.WriteLine(message);
+            }
+            , new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                CancellationToken = cancellationTokenSource.Token
             });
             #endregion
 
@@ -203,6 +221,12 @@ namespace Concurrency.Demo
             {
                 string message = $"Transaction ticket booking to {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
                 concurrentBag.Add(message);
+                Console.WriteLine(message);
+            }
+            , new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                CancellationToken = cancellationTokenSource.Token
             });
             #endregion
 
@@ -241,6 +265,12 @@ namespace Concurrency.Demo
             {
                 string message = $"Transaction ticket unbooking from {result.Data?.AccountHolderName ?? "NULL"} with amount {result.TransferedAmount} result: {(result.IsFaulted ? "thrown an exception - see logs..." : string.Empty)} with transaction status: {result.TransactionStatus}";
                 concurrentBag.Add(message);
+                Console.WriteLine(message);
+            }, 
+            new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = MAX_PARALLEL_OPERATIONS,
+                CancellationToken = cancellationTokenSource.Token
             });
             #endregion
 
@@ -277,11 +307,6 @@ namespace Concurrency.Demo
                     writeTransferStatusBlock.Completion,
                     writeBookingTicketTransactionBlock.Completion)
                     .Wait();
-
-                Parallel.ForEach(concurrentBag, message =>
-                {
-                    Console.WriteLine(message);
-                });
             }
             catch (AggregateException ae)
             {
